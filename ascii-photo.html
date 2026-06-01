@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCII PHOTO CONVERTER</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#020a02;
+  --accent:#00ff41;
+  --accent2:#00cc33;
+  --dim:#014d10;
+  --dimmer:#01230a;
+  --panel:#040d04;
+  --border:#00ff4122;
+  --border2:#00ff4144;
+}
+
+body{
+  background:var(--bg);
+  color:var(--accent);
+  font-family:'Share Tech Mono',monospace;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  overflow-x:hidden;
+}
+
+/* CRT scanlines */
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,.012) 2px,rgba(0,255,65,.012) 4px);
+  pointer-events:none;z-index:999;
+}
+
+/* Ambient glow bg */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background:radial-gradient(ellipse 80% 50% at 50% 0%,rgba(0,255,65,.05) 0%,transparent 70%);
+  pointer-events:none;
+}
+
+/* ── Header ── */
+header{
+  width:100%;padding:12px 24px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border2);
+  background:linear-gradient(180deg,#030d03,var(--bg));
+  position:sticky;top:0;z-index:10;
+  backdrop-filter:blur(10px);
+}
+.logo{
+  font-family:'Orbitron',sans-serif;
+  font-weight:900;font-size:1.1rem;
+  letter-spacing:.25em;
+  color:var(--accent);
+  text-shadow:0 0 20px var(--accent),0 0 40px rgba(0,255,65,.3);
+}
+.logo em{color:#fff;font-style:normal;}
+.tagline{font-size:.6rem;letter-spacing:.2em;color:var(--dim);margin-top:2px;}
+
+/* ── Main Layout ── */
+.main{
+  width:100%;max-width:1100px;
+  padding:24px 16px;
+  display:flex;flex-direction:column;
+  align-items:center;gap:20px;
+}
+
+/* ── Drop Zone ── */
+.drop-zone{
+  width:100%;max-width:560px;
+  border:2px dashed var(--border2);
+  border-radius:6px;
+  padding:44px 24px;
+  text-align:center;
+  cursor:pointer;
+  position:relative;
+  transition:all .2s;
+  background:var(--panel);
+  overflow:hidden;
+}
+.drop-zone::before{
+  content:'';
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 0%,rgba(0,255,65,.05),transparent 70%);
+  opacity:0;transition:opacity .2s;
+}
+.drop-zone:hover,
+.drop-zone.drag-over{
+  border-color:var(--accent);
+  box-shadow:0 0 30px rgba(0,255,65,.15),inset 0 0 30px rgba(0,255,65,.05);
+}
+.drop-zone:hover::before,
+.drop-zone.drag-over::before{opacity:1;}
+
+.drop-icon{
+  font-size:2.8rem;
+  line-height:1;margin-bottom:14px;
+  filter:drop-shadow(0 0 8px var(--accent));
+}
+.drop-title{
+  font-family:'Orbitron',sans-serif;
+  font-size:.85rem;letter-spacing:.2em;
+  margin-bottom:6px;
+  color:var(--accent);
+}
+.drop-sub{font-size:.65rem;letter-spacing:.15em;color:var(--dim);}
+.drop-btn{
+  display:inline-block;margin-top:16px;
+  padding:8px 22px;
+  border:1px solid var(--accent);
+  border-radius:3px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:.75rem;letter-spacing:.15em;
+  color:var(--accent);cursor:pointer;
+  background:transparent;
+  transition:all .15s;
+  text-transform:uppercase;
+}
+.drop-btn:hover{background:var(--accent);color:#000;}
+#fileInput{display:none;}
+
+/* ── Split view ── */
+.split-view{
+  width:100%;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+@media(max-width:640px){.split-view{grid-template-columns:1fr;}}
+
+.panel-box{
+  border:1px solid var(--border2);
+  border-radius:6px;
+  overflow:hidden;
+  background:#000;
+  position:relative;
+}
+.panel-label{
+  position:absolute;top:0;left:0;right:0;
+  padding:5px 12px;
+  font-size:.6rem;letter-spacing:.2em;
+  background:rgba(0,0,0,.7);
+  border-bottom:1px solid var(--border);
+  color:var(--dim);
+  z-index:2;
+  display:flex;justify-content:space-between;
+  backdrop-filter:blur(4px);
+}
+.panel-label span{color:var(--accent);}
+
+#originalImg{
+  width:100%;display:block;
+  min-height:200px;object-fit:cover;
+  opacity:.9;
+}
+.img-placeholder{
+  width:100%;min-height:240px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--dimmer);
+  font-size:.7rem;letter-spacing:.15em;
+}
+
+#ascii-canvas{
+  width:100%;display:block;
+  image-rendering:pixelated;
+}
+
+/* Corner marks */
+.corner{position:absolute;width:12px;height:12px;border-color:var(--accent);border-style:solid;opacity:.6;}
+.corner.tl{top:28px;left:6px;border-width:2px 0 0 2px;}
+.corner.tr{top:28px;right:6px;border-width:2px 2px 0 0;}
+.corner.bl{bottom:6px;left:6px;border-width:0 0 2px 2px;}
+.corner.br{bottom:6px;right:6px;border-width:0 2px 2px 0;}
+
+/* ── Controls ── */
+.controls{
+  width:100%;
+  background:var(--panel);
+  border:1px solid var(--border2);
+  border-radius:6px;
+  padding:18px 20px;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:16px 28px;
+}
+.sec-title{
+  grid-column:1/-1;
+  font-size:.6rem;letter-spacing:.25em;color:var(--dim);
+  text-transform:uppercase;
+  border-bottom:1px solid var(--border);
+  padding-bottom:8px;
+}
+.ctrl-group{display:flex;flex-direction:column;gap:7px;}
+.ctrl-label{
+  font-size:.62rem;letter-spacing:.18em;color:var(--dim);
+  text-transform:uppercase;
+  display:flex;justify-content:space-between;
+}
+.ctrl-label .val{color:var(--accent);font-weight:bold;}
+
+input[type=range]{
+  -webkit-appearance:none;width:100%;height:3px;
+  background:var(--dimmer);border-radius:2px;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;
+  border-radius:50%;background:var(--accent);
+  box-shadow:0 0 8px var(--accent);cursor:pointer;
+  transition:transform .1s;
+}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3);}
+
+/* Charset buttons */
+.charset-row{display:flex;gap:6px;flex-wrap:wrap;}
+.cset-btn{
+  padding:4px 10px;
+  background:transparent;border:1px solid var(--border);
+  color:var(--dim);font-family:'Share Tech Mono',monospace;
+  font-size:.68rem;letter-spacing:.1em;
+  cursor:pointer;border-radius:2px;transition:all .15s;
+}
+.cset-btn:hover,.cset-btn.active{
+  border-color:var(--accent);color:var(--accent);
+  text-shadow:0 0 6px var(--accent);
+}
+
+/* Color swatches */
+.color-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.swatch{
+  width:22px;height:22px;border-radius:3px;cursor:pointer;
+  border:2px solid transparent;transition:border-color .15s,transform .1s;
+}
+.swatch:hover{transform:scale(1.2);}
+.swatch.active{border-color:#fff;box-shadow:0 0 6px #fff8;}
+input[type=color]{
+  -webkit-appearance:none;width:26px;height:26px;
+  border:2px solid var(--border);border-radius:3px;
+  cursor:pointer;background:none;padding:0;
+}
+input[type=color]::-webkit-color-swatch-wrapper{padding:2px;}
+input[type=color]::-webkit-color-swatch{border:none;border-radius:2px;}
+
+/* Toggle buttons */
+.tog-row{display:flex;gap:8px;flex-wrap:wrap;}
+.tog{
+  padding:5px 12px;
+  background:transparent;border:1px solid var(--border);
+  color:var(--dim);font-family:'Share Tech Mono',monospace;
+  font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;
+  cursor:pointer;border-radius:2px;transition:all .15s;
+}
+.tog:hover{border-color:var(--accent);color:var(--accent);}
+.tog.on{background:var(--accent);color:#000;border-color:var(--accent);box-shadow:0 0 12px var(--accent);font-weight:bold;}
+
+/* Download button */
+.dl-btn{
+  padding:12px 36px;
+  background:transparent;
+  border:2px solid var(--accent);
+  color:var(--accent);
+  font-family:'Orbitron',sans-serif;
+  font-size:.8rem;font-weight:700;
+  letter-spacing:.25em;text-transform:uppercase;
+  cursor:pointer;border-radius:3px;
+  transition:all .2s;
+  text-shadow:0 0 10px var(--accent);
+  box-shadow:0 0 20px rgba(0,255,65,.1);
+  display:none;
+}
+.dl-btn:hover{
+  background:var(--accent);color:#000;
+  box-shadow:0 0 40px rgba(0,255,65,.4);
+}
+
+footer{
+  margin-top:auto;padding:14px;
+  font-size:.58rem;color:var(--dimmer);
+  letter-spacing:.15em;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">ASCII<em>FORGE</em></div>
+    <div class="tagline">// PHOTO → TEXT ART CONVERTER</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone"
+    ondragover="onDragOver(event)"
+    ondragleave="onDragLeave(event)"
+    ondrop="onDrop(event)"
+    onclick="document.getElementById('fileInput').click()">
+    <div class="drop-icon">⬡</div>
+    <div class="drop-title">DROP IMAGE HERE</div>
+    <div class="drop-sub">or click to select a file</div>
+    <div class="drop-btn">BROWSE FILES</div>
+    <input type="file" id="fileInput" accept="image/*" onchange="loadFile(event)">
+  </div>
+
+  <!-- Split View (hidden until image loaded) -->
+  <div class="split-view" id="splitView" style="display:none">
+    <!-- Original -->
+    <div class="panel-box">
+      <div class="panel-label">ORIGINAL <span id="imgInfo">—</span></div>
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+      <img id="originalImg" alt="original">
+    </div>
+    <!-- ASCII Output -->
+    <div class="panel-box">
+      <div class="panel-label">ASCII OUTPUT <span id="asciiInfo">—</span></div>
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+      <canvas id="ascii-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls" id="controlsBox" style="display:none">
+    <div class="sec-title">// RENDER SETTINGS</div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-label">CHAR SIZE <span class="val" id="v-fsize">10px</span></div>
+      <input type="range" id="fontSize" min="3" max="24" value="10" oninput="setVal('v-fsize',this.value+'px');render()">
+    </div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-label">CONTRAST <span class="val" id="v-contrast">1.0</span></div>
+      <input type="range" id="contrast" min="0.3" max="3" step="0.1" value="1.0" oninput="setVal('v-contrast',parseFloat(this.value).toFixed(1));render()">
+    </div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-label">BRIGHTNESS <span class="val" id="v-bright">1.0</span></div>
+      <input type="range" id="brightness" min="0.2" max="2.5" step="0.1" value="1.0" oninput="setVal('v-bright',parseFloat(this.value).toFixed(1));render()">
+    </div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-label">LINE HEIGHT <span class="val" id="v-lh">1.1</span></div>
+      <input type="range" id="lineHeight" min="0.6" max="2.0" step="0.05" value="1.1" oninput="setVal('v-lh',parseFloat(this.value).toFixed(2));render()">
+    </div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-label">OUTPUT WIDTH <span class="val" id="v-cols">120 cols</span></div>
+      <input type="range" id="colCount" min="30" max="300" value="120" oninput="setVal('v-cols',this.value+' cols');render()">
+    </div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-label">CHARACTER SET</div>
+      <div class="charset-row">
+        <button class="cset-btn active" data-set="standard" onclick="setCharset(this)">STD</button>
+        <button class="cset-btn" data-set="blocks" onclick="setCharset(this)">BLOCK</button>
+        <button class="cset-btn" data-set="minimal" onclick="setCharset(this)">MIN</button>
+        <button class="cset-btn" data-set="binary" onclick="setCharset(this)">BIN</button>
+        <button class="cset-btn" data-set="hex" onclick="setCharset(this)">HEX</button>
+        <button class="cset-btn" data-set="matrix" onclick="setCharset(this)">MX</button>
+        <button class="cset-btn" data-set="braille" onclick="setCharset(this)">⠿BRL</button>
+      </div>
+    </div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-label">CHAR COLOR</div>
+      <div class="color-row">
+        <div class="swatch active" style="background:#00ff41" data-c="#00ff41" onclick="pickSwatch(this)"></div>
+        <div class="swatch" style="background:#ff3c3c" data-c="#ff3c3c" onclick="pickSwatch(this)"></div>
+        <div class="swatch" style="background:#3cf0ff" data-c="#3cf0ff" onclick="pickSwatch(this)"></div>
+        <div class="swatch" style="background:#f5e642" data-c="#f5e642" onclick="pickSwatch(this)"></div>
+        <div class="swatch" style="background:#ff9f3c" data-c="#ff9f3c" onclick="pickSwatch(this)"></div>
+        <div class="swatch" style="background:#bf3cff" data-c="#bf3cff" onclick="pickSwatch(this)"></div>
+        <div class="swatch" style="background:#ffffff" data-c="#ffffff" onclick="pickSwatch(this)"></div>
+        <input type="color" id="customColor" value="#00ff41" oninput="customPick(this.value)" title="Custom">
+      </div>
+    </div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-label">OPTIONS</div>
+      <div class="tog-row">
+        <button class="tog" id="tog-invert" onclick="toggle('invert',this)">INVERT</button>
+        <button class="tog on" id="tog-glow" onclick="toggle('glow',this)">GLOW</button>
+        <button class="tog" id="tog-color" onclick="toggle('colorMode',this)">PHOTO COLOR</button>
+        <button class="tog" id="tog-bg" onclick="toggle('whiteBg',this)">WHITE BG</button>
+      </div>
+    </div>
+
+  </div>
+
+  <button class="dl-btn" id="dlBtn" onclick="download()">⬇ DOWNLOAD ASCII ART</button>
+
+</div>
+
+<footer>// ASCIFORGE — IMAGE TO TEXT ART ENGINE</footer>
+
+<canvas id="srcCanvas" style="display:none"></canvas>
+
+<script>
+const CHARSETS = {
+  standard:' .\'`^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$',
+  blocks:  ' ░▒▓█',
+  minimal: ' .:=+*#%@',
+  binary:  ' 01',
+  hex:     ' 0123456789ABCDEF',
+  matrix:  ' ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ',
+  braille: ' ⠁⠃⠉⠙⠑⠋⠛⠓⠊⠚⠅⠇⠍⠝⠕⠏⠟⠗⠎⠞⠥⠧⠺⠭⠽⠵⠿'
+};
+
+const state = {
+  color:'#00ff41', charset:'standard',
+  invert:false, glow:true, colorMode:false, whiteBg:false,
+  img:null
+};
+
+const outCanvas = document.getElementById('ascii-canvas');
+const srcCanvas = document.getElementById('srcCanvas');
+const ctx = outCanvas.getContext('2d');
+const sCtx = srcCanvas.getContext('2d');
+
+// ── File loading ────────────────────────────────────────────────────────
+function loadFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  readImage(file);
+}
+function onDragOver(e){ e.preventDefault(); document.getElementById('dropZone').classList.add('drag-over'); }
+function onDragLeave(e){ document.getElementById('dropZone').classList.remove('drag-over'); }
+function onDrop(e){
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if(file && file.type.startsWith('image/')) readImage(file);
+}
+
+function readImage(file){
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      state.img = img;
+      document.getElementById('originalImg').src = ev.target.result;
+      document.getElementById('imgInfo').textContent = img.width+'×'+img.height;
+      document.getElementById('splitView').style.display = 'grid';
+      document.getElementById('controlsBox').style.display = 'grid';
+      document.getElementById('dlBtn').style.display = 'inline-block';
+      document.getElementById('dropZone').style.display = 'none';
+      render();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Render ──────────────────────────────────────────────────────────────
+function render(){
+  if(!state.img) return;
+
+  const fontSize   = parseInt(document.getElementById('fontSize').value);
+  const contrast   = parseFloat(document.getElementById('contrast').value);
+  const brightness = parseFloat(document.getElementById('brightness').value);
+  const lhMul      = parseFloat(document.getElementById('lineHeight').value);
+  const targetCols = parseInt(document.getElementById('colCount').value);
+
+  const charW = fontSize * 0.55;
+  const charH = fontSize * lhMul;
+
+  // Determine sample grid
+  const cols = targetCols;
+  const aspect = state.img.height / state.img.width;
+  const rows = Math.round(cols * aspect * 0.5); // 0.5 because chars are taller than wide
+
+  // Sample from image
+  srcCanvas.width = cols;
+  srcCanvas.height = rows;
+  sCtx.filter = `contrast(${contrast}) brightness(${brightness})`;
+  sCtx.drawImage(state.img, 0, 0, cols, rows);
+  const pixels = sCtx.getImageData(0, 0, cols, rows).data;
+
+  const charset = CHARSETS[state.charset];
+
+  // Output canvas size
+  outCanvas.width  = Math.round(cols * charW);
+  outCanvas.height = Math.round(rows * charH);
+
+  // Background
+  ctx.fillStyle = state.whiteBg ? '#fff' : '#000';
+  ctx.fillRect(0,0,outCanvas.width,outCanvas.height);
+
+  ctx.font = `${fontSize}px "Share Tech Mono",monospace`;
+  ctx.textBaseline = 'top';
+
+  if(state.glow && !state.whiteBg){
+    ctx.shadowColor = state.color;
+    ctx.shadowBlur = 3;
+  } else {
+    ctx.shadowBlur = 0;
+  }
+
+  for(let row=0;row<rows;row++){
+    for(let col=0;col<cols;col++){
+      const i = (row*cols+col)*4;
+      const r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+      let lum = 0.299*r+0.587*g+0.114*b;
+      if(state.invert) lum=255-lum;
+
+      const idx = Math.floor((lum/255)*(charset.length-1));
+      const ch = charset[idx];
+
+      if(state.colorMode){
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+      } else {
+        // Blend char color with luminance
+        const hr=parseInt(state.color.slice(1,3),16);
+        const hg=parseInt(state.color.slice(3,5),16);
+        const hb=parseInt(state.color.slice(5,7),16);
+        const f=lum/255;
+        ctx.fillStyle = `rgb(${Math.round(hr*f)},${Math.round(hg*f)},${Math.round(hb*f)})`;
+      }
+      ctx.fillText(ch, col*charW, row*charH);
+    }
+  }
+
+  document.getElementById('asciiInfo').textContent = cols+'×'+rows+' chars';
+}
+
+// ── Download ────────────────────────────────────────────────────────────
+function download(){
+  const link = document.createElement('a');
+  link.download = 'ascii-art.png';
+  link.href = outCanvas.toDataURL('image/png');
+  link.click();
+}
+
+// ── UI helpers ──────────────────────────────────────────────────────────
+function setVal(id,v){ document.getElementById(id).textContent=v; }
+
+function setCharset(btn){
+  document.querySelectorAll('.cset-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  state.charset=btn.dataset.set;
+  render();
+}
+
+function pickSwatch(el){
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+  state.color=el.dataset.c;
+  state.colorMode=false;
+  document.getElementById('tog-color').classList.remove('on');
+  document.getElementById('customColor').value=state.color;
+  render();
+}
+
+function customPick(val){
+  state.color=val;
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+  state.colorMode=false;
+  document.getElementById('tog-color').classList.remove('on');
+  render();
+}
+
+function toggle(opt,btn){
+  state[opt]=!state[opt];
+  btn.classList.toggle('on',state[opt]);
+  render();
+}
+</script>
+</body>
+</html>
